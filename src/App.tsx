@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Excalidraw, getSceneVersion } from "@excalidraw/excalidraw";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { showWindow, cancelFallback } from "./windowVisibility";
+import { saveFile, saveFileAs, openFile, clearActiveFile } from "./fileOps";
 import "./App.css";
 
 function App() {
@@ -13,8 +14,8 @@ function App() {
   // Show the window once the React component mounts (window starts hidden
   // via tauri.conf.json "visible": false to prevent white flash on boot).
   useEffect(() => {
-    cancelFallback();              // cancel the dead-man's timer
-    showWindow().catch(console.error); // reveal the window (one-shot, safe to call multiple times)
+    cancelFallback();
+    showWindow().catch(console.error);
   }, []);
 
   // Sync native Window Title via Tauri
@@ -26,36 +27,58 @@ function App() {
   useEffect(() => {
     if (!excalidrawAPI) return;
 
-    // Sync save/open events broadcast from the FS polyfill
-    const handleFileEvent = (e: any) => {
+    // Sync save/open events dispatched by fileOps.ts (and the FS polyfill)
+    const handleFileSaved = (e: any) => {
+      if (e.detail) setFilename(e.detail);
+      setLastSavedVersion(getSceneVersion(excalidrawAPI.getSceneElements()));
+      setIsDirty(false);
+    };
+    const handleFileOpened = (e: any) => {
       if (e.detail) setFilename(e.detail);
       setLastSavedVersion(getSceneVersion(excalidrawAPI.getSceneElements()));
       setIsDirty(false);
     };
 
-    window.addEventListener("excalidraw-file-saved", handleFileEvent);
-    window.addEventListener("excalidraw-file-opened", handleFileEvent);
+    window.addEventListener("excalidraw-file-saved", handleFileSaved);
+    window.addEventListener("excalidraw-file-opened", handleFileOpened);
 
     // Global hotkeys (captured before WebView2 can intercept them)
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+N — new file (WebView2 would otherwise open a new window)
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "n" || e.key === "N" || e.code === "KeyN")) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
+      const ctrl = e.ctrlKey && !e.altKey;
+
+      // Ctrl+N — new canvas
+      if (ctrl && !e.shiftKey && e.code === "KeyN") {
+        e.preventDefault(); e.stopImmediatePropagation();
         excalidrawAPI.resetScene();
         setFilename("Untitled");
         setIsDirty(false);
         setLastSavedVersion(-1);
+        clearActiveFile();
+      }
+
+      // Ctrl+S — smart save (in-place if file open, Save As otherwise)
+      if (ctrl && !e.shiftKey && e.code === "KeyS") {
+        e.preventDefault(); e.stopImmediatePropagation();
+        saveFile(excalidrawAPI).catch(console.error);
+      }
+
+      // Ctrl+Shift+S — always Save As
+      if (ctrl && e.shiftKey && e.code === "KeyS") {
+        e.preventDefault(); e.stopImmediatePropagation();
+        saveFileAs(excalidrawAPI).catch(console.error);
+      }
+
+      // Ctrl+O — open file
+      if (ctrl && !e.shiftKey && e.code === "KeyO") {
+        e.preventDefault(); e.stopImmediatePropagation();
+        openFile(excalidrawAPI).catch(console.error);
       }
 
       // Alt+Shift+D — toggle theme
-      if (e.altKey && e.shiftKey && (e.key === "D" || e.key === "d" || e.code === "KeyD")) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        const currentTheme = excalidrawAPI.getAppState().theme;
-        excalidrawAPI.updateScene({ appState: { theme: currentTheme === "dark" ? "light" : "dark" } });
+      if (e.altKey && e.shiftKey && e.code === "KeyD") {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const theme = excalidrawAPI.getAppState().theme;
+        excalidrawAPI.updateScene({ appState: { theme: theme === "dark" ? "light" : "dark" } });
       }
     };
 
@@ -63,8 +86,8 @@ function App() {
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
-      window.removeEventListener("excalidraw-file-saved", handleFileEvent);
-      window.removeEventListener("excalidraw-file-opened", handleFileEvent);
+      window.removeEventListener("excalidraw-file-saved", handleFileSaved);
+      window.removeEventListener("excalidraw-file-opened", handleFileOpened);
     };
   }, [excalidrawAPI]);
 
@@ -73,9 +96,9 @@ function App() {
       setLastSavedVersion(getSceneVersion(elements));
       return;
     }
-    const currentVersion = getSceneVersion(elements);
-    if (currentVersion !== lastSavedVersion && !isDirty) setIsDirty(true);
-    else if (currentVersion === lastSavedVersion && isDirty) setIsDirty(false);
+    const current = getSceneVersion(elements);
+    if (current !== lastSavedVersion && !isDirty) setIsDirty(true);
+    else if (current === lastSavedVersion && isDirty) setIsDirty(false);
   };
 
   return (
@@ -85,6 +108,13 @@ function App() {
         initialData={{ appState: { theme: "dark" } }}
         validateEmbeddable={true}
         onChange={onChange}
+        UIOptions={{
+          canvasActions: {
+            // Hide built-in save/export — all file ops now live in our hotkeys
+            saveToActiveFile: false,
+            export: false,
+          },
+        }}
       />
     </div>
   );
