@@ -36,8 +36,20 @@ function App() {
     window.addEventListener("excalidraw-file-saved", handleFileEvent);
     window.addEventListener("excalidraw-file-opened", handleFileEvent);
 
-    // Global hotkey: Alt+Shift+D to toggle theme
+    // Global hotkeys (captured before WebView2 can intercept them)
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+N — new file (WebView2 would otherwise open a new window)
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "n" || e.key === "N" || e.code === "KeyN")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        excalidrawAPI.resetScene();
+        setFilename("Untitled");
+        setIsDirty(false);
+        setLastSavedVersion(-1);
+      }
+
+      // Alt+Shift+D — toggle theme
       if (e.altKey && e.shiftKey && (e.key === "D" || e.key === "d" || e.code === "KeyD")) {
         e.preventDefault();
         e.stopPropagation();
