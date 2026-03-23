@@ -51,7 +51,12 @@ function buildWritable(destPath: string) {
       const blob = new Blob(parts);
       const buffer = await blob.arrayBuffer();
       await writeFile(destPath, new Uint8Array(buffer));
-      window.dispatchEvent(new CustomEvent("excalidraw-file-saved", { detail: destPath.split(/[/\\]/).pop() ?? "Untitled" }));
+      window.dispatchEvent(new CustomEvent("excalidraw-file-saved", { 
+        detail: { 
+          name: destPath.split(/[/\\]/).pop() ?? "Untitled",
+          path: destPath 
+        } 
+      }));
     },
   });
 
@@ -72,7 +77,12 @@ function buildWritable(destPath: string) {
       const blob = new Blob(parts);
       const buffer = await blob.arrayBuffer();
       await writeFile(destPath, new Uint8Array(buffer));
-      window.dispatchEvent(new CustomEvent("excalidraw-file-saved", { detail: destPath.split(/[/\\]/).pop() ?? "Untitled" }));
+      window.dispatchEvent(new CustomEvent("excalidraw-file-saved", { 
+        detail: { 
+          name: destPath.split(/[/\\]/).pop() ?? "Untitled",
+          path: destPath 
+        } 
+      }));
     },
   });
 
@@ -102,15 +112,19 @@ function buildFileHandle(filePath: string) {
   return {
     kind: "file" as const,
     name,
-    isSameEntry: async (other: { name?: string }) => other?.name === name,
+    __path: filePath, // Non-standard property for Tauri context
+    isSameEntry: async (other: any) => (other?.__path === filePath) || (other?.name === name),
     getFile: async () => {
       const bytes = await readFile(filePath);
-      window.dispatchEvent(new CustomEvent("excalidraw-file-opened", { detail: name }));
+      window.dispatchEvent(new CustomEvent("excalidraw-file-opened", { 
+        detail: { name, path: filePath } 
+      }));
       return new File([bytes], name, { type: getMimeType(name) });
     },
     createWritable: async () => buildWritable(filePath),
   };
 }
+(window as any).buildFileHandle = buildFileHandle;
 
 (window as any).showSaveFilePicker = async (options?: {
   suggestedName?: string;

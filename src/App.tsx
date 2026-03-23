@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { Excalidraw, getSceneVersion } from "@excalidraw/excalidraw";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 import { showWindow, cancelFallback } from "./windowVisibility";
-import { saveFile, saveFileAs, openFile, clearActiveFile } from "./fileOps";
+import { saveFile, saveFileAs, openFile, openFileFromPath, getActiveFilePath, clearActiveFile } from "./fileOps";
 import "./App.css";
 
 function App() {
@@ -36,12 +37,12 @@ function App() {
 
     // Sync save/open events dispatched by fileOps.ts (and the FS polyfill)
     const handleFileSaved = (e: any) => {
-      if (e.detail) setFilename(e.detail);
+      if (e.detail?.name) setFilename(e.detail.name);
       setLastSavedVersion(getSceneVersion(excalidrawAPI.getSceneElements()));
       setIsDirty(false);
     };
     const handleFileOpened = (e: any) => {
-      if (e.detail) setFilename(e.detail);
+      if (e.detail?.name) setFilename(e.detail.name);
       setLastSavedVersion(getSceneVersion(excalidrawAPI.getSceneElements()));
       setIsDirty(false);
     };
@@ -109,7 +110,38 @@ function App() {
 
     document.addEventListener("keydown", handleKeyDown, { capture: true });
 
+    // Handle files opened from Windows Explorer (Single Instance)
+    const unlistenSingleInstance = listen("single-instance", (event: any) => {
+      const args = event.payload as string[];
+      // On Windows, double-clicking a file usually puts the path in args[1]
+      const externalPath = args.find(arg => arg.toLowerCase().endsWith(".excalidraw"));
+      if (!externalPath) return;
+
+      const currentPath = getActiveFilePath();
+      // If it's already open, just focus the window
+      if (externalPath === currentPath) {
+        getCurrentWindow().setFocus().catch(console.error);
+        return;
+      }
+
+      (async () => {
+        if (isDirtyRef.current) {
+          const ok = await confirm(
+            `You have unsaved changes. Discard and open "${externalPath.split(/[/\\]/).pop()}"?`,
+            { title: "Unsaved Changes", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
+          );
+          if (!ok) return;
+        }
+
+        await openFileFromPath(externalPath, excalidrawAPI);
+        const win = getCurrentWindow();
+        await win.unminimize();
+        await win.setFocus();
+      })();
+    });
+
     return () => {
+      unlistenSingleInstance.then(fn => fn());
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
       window.removeEventListener("excalidraw-file-saved", handleFileSaved);
       window.removeEventListener("excalidraw-file-opened", handleFileOpened);
