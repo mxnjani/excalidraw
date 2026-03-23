@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Excalidraw pre-built asset bundles (large generated files, not source)
+public/excalidraw-assets/
+public/excalidraw-assets-dev/
+
+# Tauri build output
+src-tauri/target/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -149,6 +149,10 @@ function buildFileHandle(filePath: string) {
 };
 
 // ─── App mount ───────────────────────────────────────────────────────────────
+// Importing windowVisibility activates the dead-man's switch timer as a
+// side-effect, ensuring the window is never permanently hidden if React fails.
+import "./windowVisibility";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <Suspense fallback={<div />}>

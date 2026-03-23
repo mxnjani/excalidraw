@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Excalidraw, getSceneVersion } from "@excalidraw/excalidraw";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { showWindow, cancelFallback } from "./windowVisibility";
 import "./App.css";
 
 function App() {
@@ -12,7 +13,8 @@ function App() {
   // Show the window once the React component mounts (window starts hidden
   // via tauri.conf.json "visible": false to prevent white flash on boot).
   useEffect(() => {
-    getCurrentWindow().show().catch(console.error);
+    cancelFallback();              // cancel the dead-man's timer
+    showWindow().catch(console.error); // reveal the window (one-shot, safe to call multiple times)
   }, []);
 
   // Sync native Window Title via Tauri
