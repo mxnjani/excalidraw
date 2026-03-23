@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Excalidraw, getSceneVersion } from "@excalidraw/excalidraw";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { showWindow, cancelFallback } from "./windowVisibility";
 import { saveFile, saveFileAs, openFile, clearActiveFile } from "./fileOps";
 import "./App.css";
@@ -46,14 +47,23 @@ function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey && !e.altKey;
 
-      // Ctrl+N — new canvas
+      // Ctrl+N — new canvas (confirm if unsaved changes)
       if (ctrl && !e.shiftKey && e.code === "KeyN") {
         e.preventDefault(); e.stopImmediatePropagation();
-        excalidrawAPI.resetScene();
-        setFilename("Untitled");
-        setIsDirty(false);
-        setLastSavedVersion(-1);
-        clearActiveFile();
+        (async () => {
+          if (isDirty) {
+            const ok = await confirm(
+              "You have unsaved changes. Discard and create a new canvas?",
+              { title: "Unsaved Changes", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
+            );
+            if (!ok) return;
+          }
+          excalidrawAPI.resetScene();
+          setFilename("Untitled");
+          setIsDirty(false);
+          setLastSavedVersion(-1);
+          clearActiveFile();
+        })();
       }
 
       // Ctrl+S — smart save (in-place if file open, Save As otherwise)
@@ -68,10 +78,19 @@ function App() {
         saveFileAs(excalidrawAPI).catch(console.error);
       }
 
-      // Ctrl+O — open file
+      // Ctrl+O — open file (confirm if unsaved changes)
       if (ctrl && !e.shiftKey && e.code === "KeyO") {
         e.preventDefault(); e.stopImmediatePropagation();
-        openFile(excalidrawAPI).catch(console.error);
+        (async () => {
+          if (isDirty) {
+            const ok = await confirm(
+              "You have unsaved changes. Discard and open another file?",
+              { title: "Unsaved Changes", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
+            );
+            if (!ok) return;
+          }
+          openFile(excalidrawAPI).catch(console.error);
+        })();
       }
 
       // Alt+Shift+D — toggle theme
