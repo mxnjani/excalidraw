@@ -9,6 +9,12 @@ function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [lastSavedVersion, setLastSavedVersion] = useState(-1);
 
+  // Show the window once the React component mounts (window starts hidden
+  // via tauri.conf.json "visible": false to prevent white flash on boot).
+  useEffect(() => {
+    getCurrentWindow().show().catch(console.error);
+  }, []);
+
   // Sync native Window Title via Tauri
   useEffect(() => {
     const title = `Excalidraw - ${filename}${isDirty ? " *" : ""}`;
@@ -61,12 +67,7 @@ function App() {
   return (
     <div className="App">
       <Excalidraw
-        excalidrawAPI={(api) => {
-          setExcalidrawAPI(api);
-          // Show the window now that the canvas is ready — window started hidden
-          // in tauri.conf.json to prevent the white flash on startup.
-          getCurrentWindow().show().catch(console.error);
-        }}
+        excalidrawAPI={(api) => setExcalidrawAPI(api)}
         initialData={{ appState: { theme: "dark" } }}
         validateEmbeddable={true}
         onChange={onChange}
