@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Excalidraw, getSceneVersion } from "@excalidraw/excalidraw";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm } from "@tauri-apps/plugin-dialog";
@@ -10,7 +10,13 @@ function App() {
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
   const [filename, setFilename] = useState("Untitled");
   const [isDirty, setIsDirty] = useState(false);
+  const isDirtyRef = useRef(isDirty);
   const [lastSavedVersion, setLastSavedVersion] = useState(-1);
+
+  // Keep ref in sync with state for stale-closure event listeners
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
 
   // Show the window once the React component mounts (window starts hidden
   // via tauri.conf.json "visible": false to prevent white flash on boot).
@@ -51,7 +57,7 @@ function App() {
       if (ctrl && !e.shiftKey && e.code === "KeyN") {
         e.preventDefault(); e.stopImmediatePropagation();
         (async () => {
-          if (isDirty) {
+          if (isDirtyRef.current) {
             const ok = await confirm(
               "You have unsaved changes. Discard and create a new canvas?",
               { title: "Unsaved Changes", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
@@ -82,7 +88,7 @@ function App() {
       if (ctrl && !e.shiftKey && e.code === "KeyO") {
         e.preventDefault(); e.stopImmediatePropagation();
         (async () => {
-          if (isDirty) {
+          if (isDirtyRef.current) {
             const ok = await confirm(
               "You have unsaved changes. Discard and open another file?",
               { title: "Unsaved Changes", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" }
